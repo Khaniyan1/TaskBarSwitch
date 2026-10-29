@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>TaskbarSwitch</AssemblyName>
+    <RootNamespace>TaskbarSwitch</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.1</Version>
+    <Product>TaskbarSwitch</Product>
+    <AssemblyTitle>TaskbarSwitch</AssemblyTitle>
+    <Description>Switches taskbar settings when an external monitor is connected</Description>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Management" />
+    <EmbeddedResource Include="app.ico" LogicalName="TaskbarSwitch.app.ico" />
+  </ItemGroup>
+</Project>
