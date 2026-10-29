@@ -22,27 +22,37 @@ needed), single exe, per-user install to `%LOCALAPPDATA%\Programs\TaskbarSwitch`
 
 Build: `dotnet build -c Release` → `bin\Release\net48\TaskbarSwitch.exe`.
 
-## Next: auto-update from GitHub with beta and release channels
+## Auto-update (written, not yet compiled or tested)
 
-Decided so far:
+Repo: https://github.com/Khaniyan1/TaskBarSwitch (public, GPL-3.0; public so the app can read
+releases without a token). No .NET SDK on Jacob's PC yet, so nothing has been compiled locally.
 
-- **Channels map to GitHub releases.** Stable = normal releases (`/releases/latest`).
-  Beta = newest release including pre-releases. Tags: `v1.2.0` (stable), `v1.2.0-beta.1` (pre-release).
-- **GitHub Actions** on tag push: build on `windows-latest`, attach `TaskbarSwitch.exe` and
-  `TaskbarSwitch.exe.sha256` to the release, mark `-beta` tags as pre-release automatically.
-- **Updater in the app:**
-  - Settings: update channel (Stable / Beta), "Install updates automatically" vs "Just tell me".
-  - Check at startup (after ~1 min) and every 24 h, plus "Check for updates now" in tray menu.
-  - Download to `%LOCALAPPDATA%\TaskbarSwitch\update\`, verify SHA-256 against the release asset,
-    refuse anything that doesn't match or isn't a newer version.
-  - Swap: start the downloaded exe with `/update <installed path>`; it waits for the old process
-    to exit (exit event already exists), copies itself over, relaunches, logs the result.
-    Keep the previous exe as `TaskbarSwitch.prev.exe` and roll back if the new one doesn't
-    start cleanly.
-  - Never update in the middle of applying a taskbar change.
-  - Log every check, download, verification and swap.
-- **Repo must be public** so the app can read releases without a token. A private repo would
-  mean shipping a GitHub token inside the exe, which isn't acceptable.
+**Branches and releases**
 
-Open: GitHub username/repo name; whether to sign the exe later (SmartScreen warns on first install only;
+- `main` = stable, what the public gets. `beta` = day-to-day development.
+- Tag `v1.2.0-beta.1` on `beta` -> pre-release -> only Beta-channel installs get it.
+- Merge `beta` into `main`, tag `v1.2.0` there -> normal release -> everyone gets it.
+  `release.yml` refuses a stable tag that isn't on `main`.
+- The version comes from the tag (`-p:Version=`); `<Version>` in the csproj is only for local builds.
+- `build.yml` builds every push/PR to `main` and `beta` and uploads the exe as a workflow artifact.
+
+**Updater** (`Updater.cs`, hooks in `TrayApp.cs`, `SettingsForm.cs`, `Program.cs`)
+
+- Settings: channel Stable / Beta, "Install updates automatically" (off = balloon + tray item).
+  Stored as `UpdateChannel` / `AutoUpdate` in settings.ini.
+- Stable reads `/releases/latest` (never a pre-release). Beta takes the newest of all releases,
+  so it also gets stable releases. Switching Beta -> Stable never downgrades; you stay on the beta
+  until a newer stable release exists.
+- Check 1 min after start, then every 24 h (timer looks hourly), plus "Check for updates" in the tray.
+  Only the installed copy updates itself.
+- Download to `%LOCALAPPDATA%\TaskbarSwitch\update\`. Must match the `.sha256` asset (and GitHub's
+  asset digest when present), and the exe's own ProductVersion must equal the tag and be newer.
+- The update takes the same `applying` slot as a taskbar change, so the two never overlap.
+- Swap: `new.exe /update "<installed exe>" <old pid> <old version>`. It signals the old copy to exit,
+  saves `TaskbarSwitch.prev.exe` next to the installed exe, copies itself over, starts it with `/updated`.
+  The new version sets `Local\TaskbarSwitch.Started` 5 s after starting. No signal within 60 s, or the
+  process dies -> roll back to prev.exe and add the version to `update\bad-versions.txt` so it isn't retried.
+- If the updater never takes over, the old copy keeps running after 60 s.
+
+Open: whether to sign the exe later (SmartScreen warns on first install only;
 updates downloaded by the app itself don't get the web mark, so they won't warn).

@@ -8,6 +8,8 @@ namespace TaskbarSwitch
     class Config
     {
         public bool Enabled = true;
+        public string UpdateChannel = "stable";   // "stable" or "beta"
+        public bool AutoUpdate = true;            // false: just tell me
         public TaskbarProfile Laptop;
         public TaskbarProfile Docked;
         public TaskbarProfile Original;   // taskbar as it was before first run
@@ -68,6 +70,8 @@ namespace TaskbarSwitch
             return new Config
             {
                 Enabled = !d.TryGetValue("Enabled", out var e) || e != "0",
+                UpdateChannel = d.TryGetValue("UpdateChannel", out var ch) && ch == "beta" ? "beta" : "stable",
+                AutoUpdate = !d.TryGetValue("AutoUpdate", out var au) || au != "0",
                 Laptop = TaskbarProfile.FromDict(d, "Laptop", cur),
                 Docked = TaskbarProfile.FromDict(d, "Docked", cur),
                 Original = TaskbarProfile.FromDict(d, "Original", cur)
@@ -77,7 +81,12 @@ namespace TaskbarSwitch
         public void Save()
         {
             Directory.CreateDirectory(Dir);
-            var lines = new List<string> { "Enabled=" + (Enabled ? "1" : "0") };
+            var lines = new List<string>
+            {
+                "Enabled=" + (Enabled ? "1" : "0"),
+                "UpdateChannel=" + UpdateChannel,
+                "AutoUpdate=" + (AutoUpdate ? "1" : "0")
+            };
             lines.AddRange(Laptop.ToLines("Laptop"));
             lines.AddRange(Docked.ToLines("Docked"));
             lines.AddRange(Original.ToLines("Original"));

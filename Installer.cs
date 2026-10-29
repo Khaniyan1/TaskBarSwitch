@@ -33,7 +33,7 @@ namespace TaskbarSwitch
                 SetAutostart(true);
                 CreateShortcut();
 
-                string version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+                string version = Updater.CurrentVersion;
                 using (var k = Registry.CurrentUser.CreateSubKey(UninstallKey))
                 {
                     k.SetValue("DisplayName", AppName);
@@ -137,7 +137,17 @@ namespace TaskbarSwitch
             if (IsRunningFromInstallDir() && IsAutostart()) SetAutostart(true);
         }
 
-        static void CopyWithRetry(string src, string dst)
+        public static void SetDisplayVersion(string version)
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(UninstallKey, true))
+                    k?.SetValue("DisplayVersion", version);
+            }
+            catch (Exception ex) { Log.Warn("Could not update the version in Apps & features", ex); }
+        }
+
+        public static void CopyWithRetry(string src, string dst)
         {
             if (string.Equals(Path.GetFullPath(src), Path.GetFullPath(dst), StringComparison.OrdinalIgnoreCase)) return;
             for (int i = 0; ; i++)

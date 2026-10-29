@@ -9,6 +9,7 @@ namespace TaskbarSwitch
         public const string MutexName = "Local\\TaskbarSwitch.Instance";
         public const string ShowEventName = "Local\\TaskbarSwitch.Show";
         public const string ExitEventName = "Local\\TaskbarSwitch.Exit";
+        public const string StartedEventName = "Local\\TaskbarSwitch.Started";   // set by a new version once it runs
 
         static DateTime lastErrorDialog = DateTime.MinValue;
 
@@ -31,6 +32,13 @@ namespace TaskbarSwitch
             Application.SetCompatibleTextRenderingDefault(false);
 
             string arg = args.Length > 0 ? args[0].ToLowerInvariant() : "";
+
+            // Started by the running copy with a downloaded update: swap it in.
+            if (arg == "/update")
+            {
+                Updater.RunSwap(args);
+                return;
+            }
 
             if (arg == "/uninstall")
             {
@@ -92,7 +100,7 @@ namespace TaskbarSwitch
 
                 var showEvt = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
                 var exitEvt = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName);
-                Application.Run(new TrayApp(showEvt, exitEvt, arg == "/firstrun"));
+                Application.Run(new TrayApp(showEvt, exitEvt, arg == "/firstrun", arg == "/updated"));
                 GC.KeepAlive(mutex);
             }
         }

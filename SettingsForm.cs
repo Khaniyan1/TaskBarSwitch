@@ -149,10 +149,14 @@ namespace TaskbarSwitch
         readonly CheckBox autostartBox = new CheckBox { Text = "Start with Windows", AutoSize = true };
         readonly Label statusLabel = new Label { AutoSize = true };
         readonly Label detailLabel = new Label { AutoSize = true, ForeColor = SystemColors.GrayText };
+        readonly Choice channel = new Choice(new[] { "Stable", "Beta (test versions)" }, new[] { 0, 1 });
+        readonly CheckBox autoUpdateBox = new CheckBox { Text = "Install updates automatically", AutoSize = true };
 
         public event Action Saved;
         public event Action RestoreRequested;
         public event Action ResetRequested;
+        public event Action ChannelChanged;
+        public event Action CheckUpdatesRequested;
 
         public SettingsForm(Config cfg)
         {
@@ -198,6 +202,25 @@ namespace TaskbarSwitch
             autostartBox.Margin = new Padding(9, 4, 3, 2);
             root.Controls.Add(enabledBox);
             root.Controls.Add(autostartBox);
+
+            var updates = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(6, 8, 3, 0) };
+            updates.Controls.Add(new Label { Text = "Updates:", AutoSize = true, Margin = new Padding(3, 6, 3, 0) });
+            channel.Box.Width = 170;
+            channel.Box.Margin = new Padding(3, 2, 12, 0);
+            updates.Controls.Add(channel.Box);
+            autoUpdateBox.Margin = new Padding(3, 5, 12, 0);
+            updates.Controls.Add(autoUpdateBox);
+            var checkNow = new LinkLabel { Text = "Check now", AutoSize = true, Margin = new Padding(3, 6, 3, 0) };
+            checkNow.LinkClicked += (s, e) => CheckUpdatesRequested?.Invoke();
+            updates.Controls.Add(checkNow);
+            updates.Controls.Add(new Label
+            {
+                Text = "Version " + Updater.CurrentVersion,
+                AutoSize = true,
+                ForeColor = SystemColors.GrayText,
+                Margin = new Padding(12, 6, 3, 0)
+            });
+            root.Controls.Add(updates);
 
             var note = new Label
             {
@@ -250,6 +273,8 @@ namespace TaskbarSwitch
             dockedEd.LoadProfile(config.Docked);
             enabledBox.Checked = config.Enabled;
             autostartBox.Checked = Installer.IsAutostart();
+            channel.Value = config.UpdateChannel == "beta" ? 1 : 0;
+            autoUpdateBox.Checked = config.AutoUpdate;
         }
 
         public void SetStatus(bool externalConnected, string detail)
@@ -265,11 +290,16 @@ namespace TaskbarSwitch
             laptopEd.SaveInto(config.Laptop);
             dockedEd.SaveInto(config.Docked);
             config.Enabled = enabledBox.Checked;
+            string oldChannel = config.UpdateChannel;
+            config.UpdateChannel = channel.Value == 1 ? "beta" : "stable";
+            config.AutoUpdate = autoUpdateBox.Checked;
             try { Installer.SetAutostart(autostartBox.Checked); }
             catch (Exception ex) { Log.Error("Changing Start with Windows failed", ex); }
             Log.Info("Settings saved\r\n    laptop: " + config.Laptop + "\r\n    docked: " + config.Docked +
-                     $"\r\n    auto={config.Enabled} startWithWindows={autostartBox.Checked}");
+                     $"\r\n    auto={config.Enabled} startWithWindows={autostartBox.Checked}" +
+                     $" updates={config.UpdateChannel} autoUpdate={config.AutoUpdate}");
             Saved?.Invoke();
+            if (config.UpdateChannel != oldChannel) ChannelChanged?.Invoke();
         }
 
         void OnRestore()

@@ -57,8 +57,7 @@ namespace TaskbarSwitch
         /// <summary>Writes a header with everything useful for debugging on another machine.</summary>
         public static void SessionHeader()
         {
-            string version = "?";
-            try { version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3); } catch { }
+            string version = Updater.CurrentVersion;
 
             string win = Environment.OSVersion.VersionString;
             try

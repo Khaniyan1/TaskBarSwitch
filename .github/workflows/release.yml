@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag to publish a release:
+#   v1.2.0         stable release, must be on main      -> Stable and Beta channels
+#   v1.2.0-beta.1  pre-release, usually from beta        -> Beta channel only
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out version and channel
+        id: v
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if (-not ($tag -match '^v(\d+\.\d+\.\d+)(-beta\.\d+)?$')) {
+            throw "Tag '$tag' must look like v1.2.0 or v1.2.0-beta.1"
+          }
+          $prerelease = [bool]$Matches[2]
+          if (-not $prerelease) {
+            git merge-base --is-ancestor HEAD origin/main
+            if ($LASTEXITCODE -ne 0) { throw "Stable tag '$tag' is not on main. Merge beta into main first." }
+          }
+          "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+          "prerelease=$($prerelease.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build -c Release -p:Version=${{ steps.v.outputs.version }}
+
+      - name: Package and hash
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item bin/Release/net48/TaskbarSwitch.exe dist/
+          $hash = (Get-FileHash dist/TaskbarSwitch.exe -Algorithm SHA256).Hash.ToLower()
+          Set-Content dist/TaskbarSwitch.exe.sha256 "$hash  TaskbarSwitch.exe" -NoNewline -Encoding ascii
+          Write-Host "SHA-256: $hash"
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $flags = @('--title', $tag, '--generate-notes')
+          if ('${{ steps.v.outputs.prerelease }}' -eq 'true') { $flags += '--prerelease' } else { $flags += '--latest' }
+          gh release create $tag dist/TaskbarSwitch.exe dist/TaskbarSwitch.exe.sha256 @flags
