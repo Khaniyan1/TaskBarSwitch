@@ -45,7 +45,8 @@ namespace TaskbarSwitch
         readonly ToolStripMenuItem checkUpdateItem;
         readonly ToolStripMenuItem installUpdateItem;
         DateTime lastUpdateCheck = DateTime.MinValue;
-        ReleaseInfo availableUpdate;   // found but not installed (when the user wants to be asked first)
+        ReleaseInfo availableUpdate;   // newer release found; the user downloads it from its page
+        string notifiedVersion;
         bool updateBusy;
 
         public TrayApp(EventWaitHandle showEvt, EventWaitHandle exitEvt, bool firstRun, bool justUpdated)
@@ -75,7 +76,7 @@ namespace TaskbarSwitch
             menu.Items.Add("Bring off-screen windows back", null, (s, e) => GatherNow());
             menu.Items.Add("Open log", null, (s, e) => Log.OpenInEditor());
             menu.Items.Add(new ToolStripSeparator());
-            installUpdateItem = new ToolStripMenuItem("Install update", null, (s, e) => InstallAvailableUpdate()) { Visible = false };
+            installUpdateItem = new ToolStripMenuItem("Download update", null, (s, e) => OpenUpdatePage()) { Visible = false };
             checkUpdateItem = new ToolStripMenuItem("Check for updates", null, (s, e) => CheckForUpdates(true));
             menu.Items.Add(installUpdateItem);
             menu.Items.Add(checkUpdateItem);
@@ -90,7 +91,7 @@ namespace TaskbarSwitch
                 Visible = true
             };
             tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
-            tray.BalloonTipClicked += (s, e) => { if (availableUpdate != null) InstallAvailableUpdate(); };
+            tray.BalloonTipClicked += (s, e) => OpenUpdatePage();
 
             debounce = new System.Windows.Forms.Timer { Interval = 2000 };
             debounce.Tick += (s, e) => { debounce.Stop(); Evaluate(false); };
@@ -182,7 +183,6 @@ namespace TaskbarSwitch
             checkUpdateItem.Enabled = false;
             lastUpdateCheck = DateTime.Now;
             string channel = config.UpdateChannel;
-            bool auto = config.AutoUpdate;
             Task.Run(() =>
             {
                 ReleaseInfo r = null;
@@ -206,85 +206,28 @@ namespace TaskbarSwitch
                         return;
                     }
                     availableUpdate = r;
-                    installUpdateItem.Text = "Install update " + r.Version;
+                    installUpdateItem.Text = $"Download update {r.Version}…";
                     installUpdateItem.Visible = true;
-                    if (auto) InstallAvailableUpdate();
-                    else tray.ShowBalloonTip(10000, "TaskbarSwitch " + r.Version + " is available",
-                        "Click here to install it.", ToolTipIcon.Info);
+                    // Remind once per version per session; a manual check always says so.
+                    if (manual || notifiedVersion != r.Tag)
+                    {
+                        notifiedVersion = r.Tag;
+                        tray.ShowBalloonTip(10000, "TaskbarSwitch " + r.Version + " is available",
+                            "Click here to open the download page.", ToolTipIcon.Info);
+                    }
                 }));
             });
         }
 
-        void InstallAvailableUpdate()
+        // Installing updates in place (Updater.Download / Launch / RunSwap) is switched off for now:
+        // Smart App Control blocks unsigned exes it hasn't seen before. Re-enable once releases are signed.
+        void OpenUpdatePage()
         {
             var r = availableUpdate;
-            if (r == null || updateBusy) return;
-            updateBusy = true;
-            checkUpdateItem.Enabled = installUpdateItem.Enabled = false;
-            Task.Run(() =>
-            {
-                string path = null;
-                try { path = Updater.Download(r); }
-                catch (Exception ex) { Log.Warn($"Downloading {r.Tag} failed", ex); }
-                invoker.BeginInvoke((Action)(() =>
-                {
-                    if (path == null)
-                    {
-                        EndUpdateAttempt();
-                        tray.ShowBalloonTip(5000, "TaskbarSwitch", $"Update {r.Version} could not be downloaded or verified. Details are in the log.", ToolTipIcon.Warning);
-                        return;
-                    }
-                    StartSwap(path, r, 0);
-                }));
-            });
-        }
-
-        void StartSwap(string path, ReleaseInfo r, int attempt)
-        {
-            // Never update in the middle of a taskbar change: take the same slot a change uses.
-            if (Interlocked.CompareExchange(ref applying, 1, 0) != 0)
-            {
-                if (attempt == 0) Log.Info("A taskbar change is in progress; the update waits for it to finish");
-                var later = new System.Windows.Forms.Timer { Interval = 5000 };
-                later.Tick += (s, e) => { later.Stop(); later.Dispose(); StartSwap(path, r, attempt + 1); };
-                later.Start();
-                return;
-            }
-
-            // The updater signals our exit event when it's running. If it never does, carry on as before.
-            if (Updater.Launch(path))
-            {
-                var giveUp = new System.Windows.Forms.Timer { Interval = 60 * 1000 };
-                giveUp.Tick += (s, e) =>
-                {
-                    giveUp.Stop(); giveUp.Dispose();
-                    Log.Warn("The updater didn't take over within 60 s; still running " + Updater.CurrentVersion);
-                    ReleaseApplySlot();
-                    EndUpdateAttempt();
-                };
-                giveUp.Start();
-            }
-            else
-            {
-                ReleaseApplySlot();
-                EndUpdateAttempt();
-            }
-        }
-
-        void EndUpdateAttempt()
-        {
-            updateBusy = false;
-            checkUpdateItem.Enabled = installUpdateItem.Enabled = true;
-        }
-
-        void ReleaseApplySlot()
-        {
-            Interlocked.Exchange(ref applying, 0);
-            if (recheckAfterApply)
-            {
-                recheckAfterApply = false;
-                Evaluate(true);
-            }
+            if (r == null) return;
+            Log.Info("Opening the download page for " + r.Tag);
+            try { System.Diagnostics.Process.Start(r.PageUrl); }
+            catch (Exception ex) { Log.Warn("Could not open " + r.PageUrl, ex); }
         }
 
         void OnDisplaySettingsChanged(object sender, EventArgs e)

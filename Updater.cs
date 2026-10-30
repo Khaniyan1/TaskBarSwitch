@@ -63,6 +63,7 @@ namespace TaskbarSwitch
         public string ExeUrl;
         public string ShaUrl;
         public string Digest;   // "sha256:..." from the GitHub API, when it provides one
+        public string PageUrl;  // the release page on GitHub
         public override string ToString() => Tag;
     }
 
@@ -142,7 +143,12 @@ namespace TaskbarSwitch
             var version = SemVer.TryParse(tag);
             if (version == null) return null;
 
-            var r = new ReleaseInfo { Tag = tag, Version = version };
+            var r = new ReleaseInfo
+            {
+                Tag = tag,
+                Version = version,
+                PageUrl = d.TryGetValue("html_url", out var page) ? page as string : $"https://github.com/{Repo}/releases/tag/{tag}"
+            };
             if (d.TryGetValue("assets", out var a) && a is object[] assets)
             {
                 foreach (Dictionary<string, object> asset in assets.OfType<Dictionary<string, object>>())
