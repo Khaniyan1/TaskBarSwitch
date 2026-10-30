@@ -28,6 +28,9 @@ namespace TaskbarSwitch
         readonly Control invoker;
         readonly System.Windows.Forms.Timer debounce;
         readonly System.Windows.Forms.Timer poll;
+        readonly System.Windows.Forms.Timer rememberSoon;
+        string lastLayout;
+        int quietPolls;
         readonly ToolStripMenuItem statusItem;
         readonly ToolStripMenuItem autoItem;
         Config config;
@@ -69,6 +72,7 @@ namespace TaskbarSwitch
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Settings…", null, (s, e) => ShowSettings());
             menu.Items.Add(autoItem);
+            menu.Items.Add("Bring off-screen windows back", null, (s, e) => GatherNow());
             menu.Items.Add("Open log", null, (s, e) => Log.OpenInEditor());
             menu.Items.Add(new ToolStripSeparator());
             installUpdateItem = new ToolStripMenuItem("Install update", null, (s, e) => InstallAvailableUpdate()) { Visible = false };
@@ -91,9 +95,22 @@ namespace TaskbarSwitch
             debounce = new System.Windows.Forms.Timer { Interval = 2000 };
             debounce.Tick += (s, e) => { debounce.Stop(); Evaluate(false); };
 
+            // Backstop for missed display events. The WMI query only runs when the screen layout changed,
+            // or once a minute regardless (e.g. unplugging a mirrored screen can leave the layout unchanged).
             poll = new System.Windows.Forms.Timer { Interval = 10000 };
-            poll.Tick += (s, e) => Evaluate(false);
+            poll.Tick += (s, e) =>
+            {
+                if (Displays.Layout() != lastLayout || ++quietPolls >= 6) Evaluate(false);
+                else RememberWindowsSoon(0);
+            };
             poll.Start();
+
+            rememberSoon = new System.Windows.Forms.Timer { Interval = 500 };
+            rememberSoon.Tick += (s, e) =>
+            {
+                rememberSoon.Stop();
+                if (lastExternal == true && config.RestoreWindows) Task.Run(() => WindowGatherer.Remember());
+            };
 
             SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
@@ -121,6 +138,26 @@ namespace TaskbarSwitch
             var started = new System.Windows.Forms.Timer { Interval = 5000 };
             started.Tick += (s, e) => { started.Stop(); started.Dispose(); Program.Signal(Program.StartedEventName); };
             started.Start();
+        }
+
+        /// <summary>Records window positions after a short delay; repeated calls within the delay collapse into one.</summary>
+        void RememberWindowsSoon(int delayMs)
+        {
+            if (lastExternal != true || !config.RestoreWindows) return;
+            rememberSoon.Stop();
+            rememberSoon.Interval = Math.Max(1, delayMs);
+            rememberSoon.Start();
+        }
+
+        void GatherNow()
+        {
+            Task.Run(() =>
+            {
+                int n = WindowGatherer.Gather("from the tray menu");
+                invoker.BeginInvoke((Action)(() => tray.ShowBalloonTip(3000, "TaskbarSwitch",
+                    n == 0 ? "No windows were off-screen." : $"Moved {n} window{(n == 1 ? "" : "s")} onto the main screen.",
+                    ToolTipIcon.Info)));
+            });
         }
 
         // ------------------------------------------------------------- updates
@@ -258,9 +295,13 @@ namespace TaskbarSwitch
         /// <summary>Checks the monitor setup; applies the matching profile when it changed (or when forced).</summary>
         void Evaluate(bool force)
         {
+            lastLayout = Displays.Layout();
+            quietPolls = 0;
             var info = Displays.Detect();
             bool ext = info.ExternalConnected;
             bool changed = lastExternal != ext;
+            bool disconnected = lastExternal == true && !ext;
+            bool reconnected = lastExternal == false && ext;
             lastExternal = ext;
             lastInfo = info;
             if (changed || info.Details != lastDetails)
@@ -269,6 +310,32 @@ namespace TaskbarSwitch
                 lastDetails = info.Details;
             }
             UpdateStatus();
+
+            // Window handling is independent of taskbar switching, so it also works while switching is paused.
+            bool gather = config.GatherWindows, restore = config.RestoreWindows;
+            // While docked, record window positions whenever a window moves, plus on every poll as a backstop.
+            WindowGatherer.Watch(ext && restore ? (Action)(() => RememberWindowsSoon(500)) : null);
+            if (ext && !changed) RememberWindowsSoon(0);
+            if (disconnected && (gather || restore))
+            {
+                Task.Run(() =>
+                {
+                    if (restore) WindowGatherer.NoteDisconnect();
+                    if (gather) WindowGatherer.Gather("external monitor disconnected");
+                    // Some apps reposition themselves a moment after the screen change; catch those too.
+                    Thread.Sleep(5000);
+                    if (gather) WindowGatherer.Gather("external monitor disconnected, second pass");
+                    if (restore) WindowGatherer.NoteSettled();
+                });
+            }
+            if (reconnected && restore)
+            {
+                Task.Run(() =>
+                {
+                    Thread.Sleep(3000);   // let the new monitor settle
+                    WindowGatherer.RestoreRemembered();
+                });
+            }
 
             if (!config.Enabled || !(changed || force)) return;
             if (Interlocked.Exchange(ref applying, 1) == 1)
@@ -365,6 +432,8 @@ namespace TaskbarSwitch
             poll.Stop();
             debounce.Stop();
             updateTimer.Stop();
+            rememberSoon.Stop();
+            WindowGatherer.Watch(null);
             form?.Close();
             tray.Visible = false;
             tray.Dispose();

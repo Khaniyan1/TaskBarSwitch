@@ -39,6 +39,28 @@ namespace TaskbarSwitch
             }
         }
 
+        /// <summary>
+        /// Cheap fingerprint of the current screen layout (a few microseconds), so the 10 s poll only
+        /// runs the WMI query when something changed.
+        /// </summary>
+        public static string Layout()
+        {
+            var sb = new System.Text.StringBuilder();
+            MonitorEnumProc add = (IntPtr hMon, IntPtr hdc, ref RECT r, IntPtr data) =>
+            {
+                sb.Append($"{r.Left},{r.Top},{r.Right},{r.Bottom};");
+                return true;
+            };
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, add, IntPtr.Zero);
+            return sb.ToString();
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct RECT { public int Left, Top, Right, Bottom; }
+        delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc cb, IntPtr data);
+
         public static Info Detect()
         {
             var info = new Info();

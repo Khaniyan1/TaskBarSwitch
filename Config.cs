@@ -10,6 +10,8 @@ namespace TaskbarSwitch
         public bool Enabled = true;
         public string UpdateChannel = "stable";   // "stable" or "beta"
         public bool AutoUpdate = true;            // false: just tell me
+        public bool GatherWindows = true;         // move stranded windows to the laptop screen on disconnect
+        public bool RestoreWindows = true;        // put them back when the monitor is reconnected
         public TaskbarProfile Laptop;
         public TaskbarProfile Docked;
         public TaskbarProfile Original;   // taskbar as it was before first run
@@ -72,6 +74,8 @@ namespace TaskbarSwitch
                 Enabled = !d.TryGetValue("Enabled", out var e) || e != "0",
                 UpdateChannel = d.TryGetValue("UpdateChannel", out var ch) && ch == "beta" ? "beta" : "stable",
                 AutoUpdate = !d.TryGetValue("AutoUpdate", out var au) || au != "0",
+                GatherWindows = !d.TryGetValue("GatherWindows", out var gw) || gw != "0",
+                RestoreWindows = !d.TryGetValue("RestoreWindows", out var rw) || rw != "0",
                 Laptop = TaskbarProfile.FromDict(d, "Laptop", cur),
                 Docked = TaskbarProfile.FromDict(d, "Docked", cur),
                 Original = TaskbarProfile.FromDict(d, "Original", cur)
@@ -85,7 +89,9 @@ namespace TaskbarSwitch
             {
                 "Enabled=" + (Enabled ? "1" : "0"),
                 "UpdateChannel=" + UpdateChannel,
-                "AutoUpdate=" + (AutoUpdate ? "1" : "0")
+                "AutoUpdate=" + (AutoUpdate ? "1" : "0"),
+                "GatherWindows=" + (GatherWindows ? "1" : "0"),
+                "RestoreWindows=" + (RestoreWindows ? "1" : "0")
             };
             lines.AddRange(Laptop.ToLines("Laptop"));
             lines.AddRange(Docked.ToLines("Docked"));

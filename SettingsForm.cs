@@ -147,6 +147,16 @@ namespace TaskbarSwitch
         readonly ProfileEditor dockedEd = new ProfileEditor("External monitor connected");
         readonly CheckBox enabledBox = new CheckBox { Text = "Switch automatically when monitors change", AutoSize = true };
         readonly CheckBox autostartBox = new CheckBox { Text = "Start with Windows", AutoSize = true };
+        readonly CheckBox gatherBox = new CheckBox
+        {
+            Text = "When the external monitor is disconnected, move windows left on it to the laptop screen",
+            AutoSize = true
+        };
+        readonly CheckBox restoreBox = new CheckBox
+        {
+            Text = "Put windows back when the external monitor is reconnected",
+            AutoSize = true
+        };
         readonly Label statusLabel = new Label { AutoSize = true };
         readonly Label detailLabel = new Label { AutoSize = true, ForeColor = SystemColors.GrayText };
         readonly Choice channel = new Choice(new[] { "Stable", "Beta (test versions)" }, new[] { 0, 1 });
@@ -200,7 +210,11 @@ namespace TaskbarSwitch
 
             enabledBox.Margin = new Padding(9, 8, 3, 2);
             autostartBox.Margin = new Padding(9, 4, 3, 2);
+            gatherBox.Margin = new Padding(9, 4, 3, 2);
             root.Controls.Add(enabledBox);
+            root.Controls.Add(gatherBox);
+            restoreBox.Margin = new Padding(9, 4, 3, 2);
+            root.Controls.Add(restoreBox);
             root.Controls.Add(autostartBox);
 
             var updates = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(6, 8, 3, 0) };
@@ -275,6 +289,8 @@ namespace TaskbarSwitch
             autostartBox.Checked = Installer.IsAutostart();
             channel.Value = config.UpdateChannel == "beta" ? 1 : 0;
             autoUpdateBox.Checked = config.AutoUpdate;
+            gatherBox.Checked = config.GatherWindows;
+            restoreBox.Checked = config.RestoreWindows;
         }
 
         public void SetStatus(bool externalConnected, string detail)
@@ -293,11 +309,13 @@ namespace TaskbarSwitch
             string oldChannel = config.UpdateChannel;
             config.UpdateChannel = channel.Value == 1 ? "beta" : "stable";
             config.AutoUpdate = autoUpdateBox.Checked;
+            config.GatherWindows = gatherBox.Checked;
+            config.RestoreWindows = restoreBox.Checked;
             try { Installer.SetAutostart(autostartBox.Checked); }
             catch (Exception ex) { Log.Error("Changing Start with Windows failed", ex); }
             Log.Info("Settings saved\r\n    laptop: " + config.Laptop + "\r\n    docked: " + config.Docked +
                      $"\r\n    auto={config.Enabled} startWithWindows={autostartBox.Checked}" +
-                     $" updates={config.UpdateChannel} autoUpdate={config.AutoUpdate}");
+                     $" updates={config.UpdateChannel} autoUpdate={config.AutoUpdate} gatherWindows={config.GatherWindows} restoreWindows={config.RestoreWindows}");
             Saved?.Invoke();
             if (config.UpdateChannel != oldChannel) ChannelChanged?.Invoke();
         }
