@@ -160,6 +160,7 @@ namespace TaskbarSwitch
         readonly Label statusLabel = new Label { AutoSize = true };
         readonly Label detailLabel = new Label { AutoSize = true, ForeColor = SystemColors.GrayText };
         readonly Choice channel = new Choice(new[] { "Stable", "Beta (test versions)" }, new[] { 0, 1 });
+        readonly CheckBox autoUpdateBox = new CheckBox { Text = "Install updates automatically", AutoSize = true };
 
         public event Action Saved;
         public event Action RestoreRequested;
@@ -221,6 +222,8 @@ namespace TaskbarSwitch
             channel.Box.Width = 170;
             channel.Box.Margin = new Padding(3, 2, 12, 0);
             updates.Controls.Add(channel.Box);
+            autoUpdateBox.Margin = new Padding(3, 5, 12, 0);
+            updates.Controls.Add(autoUpdateBox);
             var checkNow = new LinkLabel { Text = "Check now", AutoSize = true, Margin = new Padding(3, 6, 3, 0) };
             checkNow.LinkClicked += (s, e) => CheckUpdatesRequested?.Invoke();
             updates.Controls.Add(checkNow);
@@ -285,6 +288,7 @@ namespace TaskbarSwitch
             enabledBox.Checked = config.Enabled;
             autostartBox.Checked = Installer.IsAutostart();
             channel.Value = config.UpdateChannel == "beta" ? 1 : 0;
+            autoUpdateBox.Checked = config.AutoUpdate;
             gatherBox.Checked = config.GatherWindows;
             restoreBox.Checked = config.RestoreWindows;
         }
@@ -304,13 +308,14 @@ namespace TaskbarSwitch
             config.Enabled = enabledBox.Checked;
             string oldChannel = config.UpdateChannel;
             config.UpdateChannel = channel.Value == 1 ? "beta" : "stable";
+            config.AutoUpdate = autoUpdateBox.Checked;
             config.GatherWindows = gatherBox.Checked;
             config.RestoreWindows = restoreBox.Checked;
             try { Installer.SetAutostart(autostartBox.Checked); }
             catch (Exception ex) { Log.Error("Changing Start with Windows failed", ex); }
             Log.Info("Settings saved\r\n    laptop: " + config.Laptop + "\r\n    docked: " + config.Docked +
                      $"\r\n    auto={config.Enabled} startWithWindows={autostartBox.Checked}" +
-                     $" updates={config.UpdateChannel} gatherWindows={config.GatherWindows} restoreWindows={config.RestoreWindows}");
+                     $" updates={config.UpdateChannel} autoUpdate={config.AutoUpdate} gatherWindows={config.GatherWindows} restoreWindows={config.RestoreWindows}");
             Saved?.Invoke();
             if (config.UpdateChannel != oldChannel) ChannelChanged?.Invoke();
         }
