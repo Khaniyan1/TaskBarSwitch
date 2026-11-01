@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Threading;
@@ -42,7 +43,7 @@ namespace TaskbarSwitch
                         File.Move(FilePath, OldPath);
                     }
                     File.AppendAllText(FilePath,
-                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {level} [t{Thread.CurrentThread.ManagedThreadId}] {msg}\r\n");
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) + $" {level} [t{Thread.CurrentThread.ManagedThreadId}] {msg}\r\n");
                 }
             }
             catch { /* logging must never break the app */ }
