@@ -8,7 +8,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Local builds only. Release builds get the version from the git tag (v1.2.0, v1.2.0-beta.1). -->
-    <Version>1.0.1</Version>
+    <Version>1.2.0-beta.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>TaskbarSwitch</Product>
     <AssemblyTitle>TaskbarSwitch</AssemblyTitle>
